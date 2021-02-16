@@ -5,6 +5,8 @@
 #include <iostream>
 #include <SDL.h>
 
+using std::rand;
+
 class Color
 {
 public:
@@ -28,6 +30,23 @@ public:
 		w = std::min(int(wd + 0.5), 255);
 		return Color(w, w, w);
 	}
+};
+
+class Vector2
+{
+public:
+	double x, y;
+
+	Vector2() = default;
+	Vector2(double x, double y): x(x), y(y) { }
+	double Length() const { return sqrt(x*x + y*y); }
+	void Normalize() { *this /= Length(); }
+	Vector2 operator - () const { return Vector2(-x, -y); }
+	Vector2 operator + (const Vector2 v) const { return Vector2(x + v.x, y + v.y); }
+	Vector2 operator - (const Vector2 v) const { return Vector2(x - v.x, y - v.y); }
+	double operator * (const Vector2 v) const { return x * v.x + y * v.y; }
+	Vector2 operator / (double k) const { return Vector2(x / k, y / k); }
+	Vector2 & operator /= (double k) { x /= k; y /= k; return *this; }
 };
 
 class SDL_Screen
@@ -119,22 +138,117 @@ public:
 
 static SDL_Screen Screen;
 
-class Scene
+class Wall
 {
-	int x = 100;
-	int y = 100;
+public:
+	int x1, y1, x2, y2;
+
+	Wall() = default;
+
+	Wall(int x1, int y1, int x2, int y2)
+		: x1(x1), y1(y1), x2(x2), y2(y2)
+	{
+	};
+
+	void Draw(const Color &c = Color::White())
+	{
+		Screen.Line(x1, y1, x2, y2, c);
+	};
+};
+
+class Ray
+{
+	int x, y;
+	Vector2 dir;
 
 public:
-	void Draw()
+	Ray() = default;
+
+	Ray(int x, int y, int a): x(x), y(y)
 	{
-		Screen.Line(x - 10, y, x + 10, y, Color::Acid());
-		Screen.Line(x, y - 10, x, y + 10, Color::Acid());
+		double angle = a * M_PI / 180.0;
+		dir.x = cos(angle);
+		dir.y = sin(angle);
+		dir.Normalize();
 	};
 
 	void Move(int dx, int dy)
 	{
 		x += dx;
 		y += dy;
+	}
+
+	bool Intersect(const Wall &wall)
+	{
+		// TODO
+		(void) wall;
+		return true;
+	};
+};
+
+class Bulb
+{
+	int x, y;
+	static const int num_rays = 360;
+	Ray rays[num_rays];
+
+public:
+	Bulb() = default;
+
+	Bulb(int x, int y): x(x), y(y)
+	{
+		for (int i = 0; i < num_rays; i++)
+			rays[i] = Ray(x, y, i);
+	};
+
+	void Move(int dx, int dy)
+	{
+		x += dx;
+		y += dy;
+
+		for (int i = 0; i < num_rays; i++)
+			rays[i].Move(dx, dy);
+	}
+
+	void Draw(const Wall &wall)
+	{
+		for (int i = 0; i < num_rays; i++)
+		{
+			if (rays[i].Intersect(wall))
+			{
+				double a = i * M_PI / 180.0;
+				Screen.Line(x, y, x + 10 * cos(a), y + 10 * sin(a));
+			}
+		}
+	};
+};
+
+class Scene
+{
+	Bulb bulb;
+	Wall wall;
+
+public:
+	Scene()
+	{
+		int width = Screen.GetWidth();
+		int height = Screen.GetHeight();
+
+		bulb = Bulb(width / 2, height / 2);
+
+		wall = Wall(rand() % width, rand() % height,
+					rand() % width, rand() % height);
+	}
+
+	void Draw()
+	{
+		bulb.Draw(wall);
+		wall.Draw(Color::Gray(50));
+	};
+
+	void Move(int dx, int dy)
+	{
+		bulb.Move(dx, dy);
 	}
 };
 
@@ -185,6 +299,8 @@ int main()
 	Scene Scene;
 	int dx = 0, dy = 0;
 	bool stop = false;
+
+	std::srand(std::time(nullptr));
 
 	while (!stop)
 	{
