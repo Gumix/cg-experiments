@@ -5,6 +5,31 @@
 #include <iostream>
 #include <SDL.h>
 
+class Color
+{
+public:
+	uint8_t r, g, b;
+
+	Color(uint8_t red, uint8_t green, uint8_t blue)
+		: r(red), g(green), b(blue)
+	{
+	}
+
+	static const Color White()	{ return Color(0xff, 0xff, 0xff); }
+	static const Color Red()	{ return Color(0xff, 0x00, 0x00); }
+	static const Color Green()	{ return Color(0x00, 0xff, 0x00); }
+	static const Color Blue()	{ return Color(0x00, 0x00, 0xff); }
+	static const Color Magenta(){ return Color(0xff, 0x00, 0xff); }
+	static const Color Acid()	{ return Color(0xc6, 0xff, 0x00); }
+
+	static const Color Gray(uint8_t w)
+	{
+		double wd = w / 100.0 * 255.0;
+		w = std::min(int(wd + 0.5), 255);
+		return Color(w, w, w);
+	}
+};
+
 class SDL_Screen
 {
 	int width, height;
@@ -67,18 +92,18 @@ public:
 		SDL_RenderPresent(renderer);
 	}
 
-	void Pixel(int x, int y)
+	void Pixel(int x, int y, const Color &c = Color::White())
 	{
-		if (SDL_SetRenderDrawColor(renderer, 0xff, 0xff, 0xff, 0xff))
+		if (SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, 0xff))
 			Error("SDL_SetRenderDrawColor failed");
 
 		if (SDL_RenderDrawPoint(renderer, x, y))
 			Error("SDL_RenderDrawPoint failed");
 	};
 
-	void Line(int x1, int y1, int x2, int y2)
+	void Line(int x1, int y1, int x2, int y2, const Color &c = Color::White())
 	{
-		if (SDL_SetRenderDrawColor(renderer, 0xff, 0xff, 0xff, 0xff))
+		if (SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, 0xff))
 			Error("SDL_SetRenderDrawColor failed");
 
 		if (SDL_RenderDrawLine(renderer, x1, y1, x2, y2))
@@ -102,7 +127,8 @@ class Scene
 public:
 	void Draw()
 	{
-		Screen.Pixel(x, y);
+		Screen.Line(x - 10, y, x + 10, y, Color::Acid());
+		Screen.Line(x, y - 10, x, y + 10, Color::Acid());
 	};
 
 	void Move(int dx, int dy)
