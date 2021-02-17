@@ -178,11 +178,22 @@ public:
 		y += dy;
 	}
 
-	bool Intersect(const Wall &wall)
+	bool Intersect(const Wall &wall, double &tw, double &tr)
 	{
-		// TODO
-		(void) wall;
-		return true;
+		double nwx = wall.y2 - wall.y1;
+		double nwy = wall.x1 - wall.x2;
+		double nrx = dir.y;
+		double nry = -dir.x;
+
+		double den = nry * nwx - nrx * nwy;
+
+		if (den == 0.0)	// exact checking is ok here
+			return false;
+
+		tw = -(nrx * (wall.x1 - x) + nry * (wall.y1 - y)) / den;
+		tr = -(nwy * (wall.y1 - y) + nwx * (wall.x1 - x)) / den;
+
+		return tw > 0.0 && tw < 1.0 && tr > 0.0;
 	};
 };
 
@@ -214,10 +225,12 @@ public:
 	{
 		for (int i = 0; i < num_rays; i++)
 		{
-			if (rays[i].Intersect(wall))
+			double tw, tr;
+			if (rays[i].Intersect(wall, tw, tr))
 			{
-				double a = i * M_PI / 180.0;
-				Screen.Line(x, y, x + 10 * cos(a), y + 10 * sin(a));
+				int x2 = int(wall.x1 + tw * (wall.x2 - wall.x1) + 0.5);
+				int y2 = int(wall.y1 + tw * (wall.y2 - wall.y1) + 0.5);
+				Screen.Line(x, y, x2, y2);
 			}
 		}
 	};
