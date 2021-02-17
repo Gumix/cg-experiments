@@ -7,6 +7,12 @@
 
 using std::rand;
 
+// Linear interpolation of two values
+double Mix(double start, double end, double t)
+{
+	return start + (end - start) * t;
+}
+
 class Color
 {
 public:
@@ -221,15 +227,30 @@ public:
 			rays[i].Move(dx, dy);
 	}
 
-	void Draw(const Wall &wall)
+	void Draw(const Wall walls[], int num_walls)
 	{
 		for (int i = 0; i < num_rays; i++)
 		{
-			double tw, tr;
-			if (rays[i].Intersect(wall, tw, tr))
+			bool hit = false;
+			int j_hit;
+			double tw, tr, tw_hit;
+			double tr_hit = std::numeric_limits<double>::max();
+
+			for (int j = 0; j < num_walls; j++)
+				if (rays[i].Intersect(walls[j], tw, tr))
+					if (tr < tr_hit)
+					{
+						hit = true;
+						j_hit = j;
+						tr_hit = tr;
+						tw_hit = tw;
+					}
+
+			if (hit)
 			{
-				int x2 = int(wall.x1 + tw * (wall.x2 - wall.x1) + 0.5);
-				int y2 = int(wall.y1 + tw * (wall.y2 - wall.y1) + 0.5);
+				const Wall w = walls[j_hit];
+				int x2 = round(Mix(w.x1, w.x2, tw_hit));
+				int y2 = round(Mix(w.y1, w.y2, tw_hit));
 				Screen.Line(x, y, x2, y2);
 			}
 		}
@@ -239,7 +260,8 @@ public:
 class Scene
 {
 	Bulb bulb;
-	Wall wall;
+	static const int num_walls = 10;
+	Wall walls[num_walls];
 
 public:
 	Scene()
@@ -249,14 +271,16 @@ public:
 
 		bulb = Bulb(width / 2, height / 2);
 
-		wall = Wall(rand() % width, rand() % height,
-					rand() % width, rand() % height);
+		for (int i = 0; i < num_walls; i++)
+			walls[i] = Wall(rand() % width, rand() % height,
+							rand() % width, rand() % height);
 	}
 
 	void Draw()
 	{
-		bulb.Draw(wall);
-		wall.Draw(Color::Gray(50));
+		bulb.Draw(walls, num_walls);
+		for (int i = 0; i < num_walls; i++)
+			walls[i].Draw(Color::Gray(50));
 	};
 
 	void Move(int dx, int dy)
