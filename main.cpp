@@ -23,6 +23,7 @@ public:
 	{
 	}
 
+	static const Color Black()	{ return Color(0x00, 0x00, 0x00); }
 	static const Color White()	{ return Color(0xff, 0xff, 0xff); }
 	static const Color Red()	{ return Color(0xff, 0x00, 0x00); }
 	static const Color Green()	{ return Color(0x00, 0xff, 0x00); }
@@ -60,6 +61,12 @@ class SDL_Screen
 	int width, height;
 	SDL_Window *window = nullptr;
 	SDL_Renderer *renderer = nullptr;
+
+	void SetDrawColor(const Color &c)
+	{
+		if (SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, 0xff))
+			Error("SDL_SetRenderDrawColor failed");
+	};
 
 public:
 	SDL_Screen()
@@ -105,8 +112,7 @@ public:
 
 	void Clear()
 	{
-		if (SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0xff))
-			Error("SDL_SetRenderDrawColor failed");
+		SetDrawColor(Color::Black());
 
 		if (SDL_RenderClear(renderer))
 			Error("SDL_RenderClear failed");
@@ -119,8 +125,7 @@ public:
 
 	void Pixel(int x, int y, const Color &c = Color::White())
 	{
-		if (SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, 0xff))
-			Error("SDL_SetRenderDrawColor failed");
+		SetDrawColor(c);
 
 		if (SDL_RenderDrawPoint(renderer, x, y))
 			Error("SDL_RenderDrawPoint failed");
@@ -128,10 +133,19 @@ public:
 
 	void Line(int x1, int y1, int x2, int y2, const Color &c = Color::White())
 	{
-		if (SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, 0xff))
-			Error("SDL_SetRenderDrawColor failed");
+		SetDrawColor(c);
 
 		if (SDL_RenderDrawLine(renderer, x1, y1, x2, y2))
+			Error("SDL_RenderDrawLine failed");
+	}
+
+	void Rect(int x, int y, int w, int h, const Color &c = Color::White())
+	{
+		SetDrawColor(c);
+
+		SDL_Rect rect = { x, y, w, h };
+
+		if (SDL_RenderDrawRect(renderer, &rect))
 			Error("SDL_RenderDrawLine failed");
 	}
 
@@ -156,9 +170,15 @@ public:
 	{
 	};
 
-	void Draw(const Color &c = Color::White())
+	void Draw(int x_offset, int y_offset, double scale,
+			  const Color &c = Color::White()) const
 	{
-		Screen.Line(x1, y1, x2, y2, c);
+		int x1s = round(x1 * scale) + x_offset;
+		int y1s = round(y1 * scale) + y_offset;
+		int x2s = round(x2 * scale) + x_offset;
+		int y2s = round(y2 * scale) + y_offset;
+
+		Screen.Line(x1s, y1s, x2s, y2s, c);
 	};
 };
 
@@ -203,20 +223,31 @@ public:
 	};
 };
 
-class Bulb
+class Player
 {
 	int x, y;
-	static const int num_rays = 360;
+	static const int num_rays = 45;
 	Ray rays[num_rays];
 
 public:
-	Bulb() = default;
+	Player() = default;
 
-	Bulb(int x, int y): x(x), y(y)
+	Player(int x, int y): x(x), y(y)
 	{
 		for (int i = 0; i < num_rays; i++)
 			rays[i] = Ray(x, y, i);
 	};
+
+	bool CanMove(int dx, int dy, int map_width, int map_height)
+	{
+		if (x + dx < 0 || y + dy < 0)
+			return false;
+
+		if (x + dx >= map_width || y + dy >= map_height)
+			return false;
+
+		return true;
+	}
 
 	void Move(int dx, int dy)
 	{
@@ -248,44 +279,135 @@ public:
 
 			if (hit)
 			{
+				// TODO: Rework this
+				const int y_offset = 270;
+				const double scale = 1.5;
 				const Wall w = walls[j_hit];
-				int x2 = round(Mix(w.x1, w.x2, tw_hit));
-				int y2 = round(Mix(w.y1, w.y2, tw_hit));
-				Screen.Line(x, y, x2, y2);
+				int x1 = round(x * scale);
+				int y1 = round(y * scale) + y_offset;
+				int x2 = round(Mix(w.x1, w.x2, tw_hit) * scale);
+				int y2 = round(Mix(w.y1, w.y2, tw_hit) * scale) + y_offset;
+				Screen.Line(x1, y1, x2, y2);
 			}
 		}
 	};
 };
 
+class View
+{
+protected:
+	int x, y;
+	int width, height;
+
+public:
+	View() = default;
+
+	View(int offset, int width, int height)
+		: x(offset), width(width), height(height)
+	{
+		y = (Screen.GetHeight() - height) / 2;
+	};
+
+	void Draw()
+	{
+		Screen.Rect(x, y, width, height, Color(0, 50, 100));
+	};
+};
+
+class View2D: public View
+{
+	double scale;
+
+public:
+	View2D() = default;
+
+	View2D(int offset, int width, int height, double scale)
+		: View(offset, width, height), scale(scale)
+	{
+	};
+
+	void Draw(const Wall walls[], int num_walls)
+	{
+		for (int i = 0; i < num_walls; i++)
+			walls[i].Draw(x, y, scale, Color::Gray(50));
+
+		View::Draw();
+	};
+};
+
+class View3D: public View
+{
+public:
+	View3D() = default;
+
+	View3D(int offset, int width, int height)
+		: View(offset, width, height)
+	{
+	};
+
+	void Draw()
+	{
+		View::Draw();
+	};
+};
+
 class Scene
 {
-	Bulb bulb;
-	static const int num_walls = 10;
+	static const int map_width = 320;
+	static const int map_height = 240;
+
+	static const int num_walls = 6 + 4;
 	Wall walls[num_walls];
+
+	Player neo;
+	View2D top;
+	View3D scr;
 
 public:
 	Scene()
 	{
-		int width = Screen.GetWidth();
-		int height = Screen.GetHeight();
-
-		bulb = Bulb(width / 2, height / 2);
-
-		for (int i = 0; i < num_walls; i++)
-			walls[i] = Wall(rand() % width, rand() % height,
-							rand() % width, rand() % height);
+		InitViews();
+		InitWalls();
+		neo = Player(map_width / 2, map_height / 2);
 	}
+
+	void InitViews()
+	{
+		// Allocate 1/3 of the screen width for 2D view, and 2/3 for 3D view
+		double w = Screen.GetWidth() / 3.0;
+		double scale = w / map_width;
+		double h = map_height * scale;
+
+		top = View2D(0, w + 1, h, scale);
+		scr = View3D(w, w * 2, h * 2);
+	}
+
+	void InitWalls()
+	{
+		int w = map_width - 1;
+		int h = map_height - 1;
+
+		walls[0] = Wall(0, 0, 0, h);
+		walls[1] = Wall(0, 0, w, 0);
+		walls[2] = Wall(w, 0, w, h);
+		walls[3] = Wall(0, h, w, h);
+
+		for (int i = 4; i < num_walls; i++)
+			walls[i] = Wall(rand() % w, rand() % h,
+							rand() % w, rand() % h);
+	};
 
 	void Draw()
 	{
-		bulb.Draw(walls, num_walls);
-		for (int i = 0; i < num_walls; i++)
-			walls[i].Draw(Color::Gray(50));
+		neo.Draw(walls, num_walls);
+		top.Draw(walls, num_walls);
+		scr.Draw();
 	};
 
 	void Move(int dx, int dy)
 	{
-		bulb.Move(dx, dy);
+		if (neo.CanMove(dx, dy, map_width, map_height))
+			neo.Move(dx, dy);
 	}
 };
 
