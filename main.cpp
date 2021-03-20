@@ -2,6 +2,7 @@
 // https://github.com/Gumix/my-first-raycaster
 //
 
+#include <vector>
 #include <iostream>
 #include <SDL.h>
 
@@ -62,10 +63,16 @@ class SDL_Screen
 	SDL_Window *window = nullptr;
 	SDL_Renderer *renderer = nullptr;
 
-	void SetDrawColor(const Color &c)
+	void SetDrawColor(const Color &c) const
 	{
 		if (SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, 0xff))
 			Error("SDL_SetRenderDrawColor failed");
+	};
+
+	void Error(const char *msg) const
+	{
+		std::cerr << "Error: " << msg << ": " << SDL_GetError() << std::endl;
+		exit(1);
 	};
 
 public:
@@ -110,7 +117,7 @@ public:
 	int GetWidth() const { return width; }
 	int GetHeight() const { return height; }
 
-	void Clear()
+	void Clear() const
 	{
 		SetDrawColor(Color::Black());
 
@@ -118,12 +125,12 @@ public:
 			Error("SDL_RenderClear failed");
 	};
 
-	void Update()
+	void Update() const
 	{
 		SDL_RenderPresent(renderer);
 	}
 
-	void Pixel(int x, int y, const Color &c = Color::White())
+	void Pixel(int x, int y, const Color &c = Color::White()) const
 	{
 		SetDrawColor(c);
 
@@ -131,7 +138,7 @@ public:
 			Error("SDL_RenderDrawPoint failed");
 	};
 
-	void Line(int x1, int y1, int x2, int y2, const Color &c = Color::White())
+	void Line(int x1, int y1, int x2, int y2, const Color &c = Color::White()) const
 	{
 		SetDrawColor(c);
 
@@ -139,7 +146,7 @@ public:
 			Error("SDL_RenderDrawLine failed");
 	}
 
-	void Rect(int x, int y, int w, int h, const Color &c = Color::White())
+	void Rect(int x, int y, int w, int h, const Color &c = Color::White()) const
 	{
 		SetDrawColor(c);
 
@@ -149,11 +156,6 @@ public:
 			Error("SDL_RenderDrawLine failed");
 	}
 
-	void Error(const char *msg)
-	{
-		std::cerr << "Error: " << msg << ": " << SDL_GetError() << std::endl;
-		exit(1);
-	};
 };
 
 static SDL_Screen Screen;
@@ -162,8 +164,6 @@ class Wall
 {
 public:
 	int x1, y1, x2, y2;
-
-	Wall() = default;
 
 	Wall(int x1, int y1, int x2, int y2)
 		: x1(x1), y1(y1), x2(x2), y2(y2)
@@ -188,8 +188,6 @@ class Ray
 	Vector2 dir;
 
 public:
-	Ray() = default;
-
 	Ray(int x, int y, int a): x(x), y(y)
 	{
 		double angle = a * M_PI / 180.0;
@@ -204,7 +202,7 @@ public:
 		y += dy;
 	}
 
-	bool Intersect(const Wall &wall, double &tw, double &tr)
+	bool Intersect(const Wall &wall, double &tw, double &tr) const
 	{
 		double nwx = wall.y2 - wall.y1;
 		double nwy = wall.x1 - wall.x2;
@@ -227,7 +225,7 @@ class Player
 {
 	int x, y;
 	static const int num_rays = 45;
-	Ray rays[num_rays];
+	std::vector<Ray> rays;
 
 public:
 	Player() = default;
@@ -235,10 +233,10 @@ public:
 	Player(int x, int y): x(x), y(y)
 	{
 		for (int i = 0; i < num_rays; i++)
-			rays[i] = Ray(x, y, i);
+			rays.push_back(Ray(x, y, i));
 	};
 
-	bool CanMove(int dx, int dy, int map_width, int map_height)
+	bool CanMove(int dx, int dy, int map_width, int map_height) const
 	{
 		if (x + dx < 0 || y + dy < 0)
 			return false;
@@ -254,20 +252,20 @@ public:
 		x += dx;
 		y += dy;
 
-		for (int i = 0; i < num_rays; i++)
+		for (size_t i = 0; i < rays.size(); i++)
 			rays[i].Move(dx, dy);
 	}
 
-	void Draw(const Wall walls[], int num_walls)
+	void Draw(const std::vector<Wall> &walls) const
 	{
-		for (int i = 0; i < num_rays; i++)
+		for (size_t i = 0; i < rays.size(); i++)
 		{
 			bool hit = false;
 			int j_hit;
 			double tw, tr, tw_hit;
 			double tr_hit = std::numeric_limits<double>::max();
 
-			for (int j = 0; j < num_walls; j++)
+			for (size_t j = 0; j < walls.size(); j++)
 				if (rays[i].Intersect(walls[j], tw, tr))
 					if (tr < tr_hit)
 					{
@@ -308,7 +306,7 @@ public:
 		y = (Screen.GetHeight() - height) / 2;
 	};
 
-	void Draw()
+	void Draw() const
 	{
 		Screen.Rect(x, y, width, height, Color(0, 50, 100));
 	};
@@ -326,10 +324,10 @@ public:
 	{
 	};
 
-	void Draw(const Wall walls[], int num_walls)
+	void Draw(const std::vector<Wall> &walls) const
 	{
-		for (int i = 0; i < num_walls; i++)
-			walls[i].Draw(x, y, scale, Color::Gray(50));
+		for (size_t i = 0; i < walls.size(); i++)
+			walls[i].Draw(x, y, scale);
 
 		View::Draw();
 	};
@@ -345,7 +343,7 @@ public:
 	{
 	};
 
-	void Draw()
+	void Draw() const
 	{
 		View::Draw();
 	};
@@ -357,7 +355,7 @@ class Scene
 	static const int map_height = 240;
 
 	static const int num_walls = 6 + 4;
-	Wall walls[num_walls];
+	std::vector<Wall> walls;
 
 	Player neo;
 	View2D top;
@@ -387,20 +385,20 @@ public:
 		int w = map_width - 1;
 		int h = map_height - 1;
 
-		walls[0] = Wall(0, 0, 0, h);
-		walls[1] = Wall(0, 0, w, 0);
-		walls[2] = Wall(w, 0, w, h);
-		walls[3] = Wall(0, h, w, h);
+		walls.push_back(Wall(0, 0, 0, h));
+		walls.push_back(Wall(0, 0, w, 0));
+		walls.push_back(Wall(w, 0, w, h));
+		walls.push_back(Wall(0, h, w, h));
 
 		for (int i = 4; i < num_walls; i++)
-			walls[i] = Wall(rand() % w, rand() % h,
-							rand() % w, rand() % h);
+			walls.push_back(Wall(rand() % w, rand() % h,
+							rand() % w, rand() % h));
 	};
 
-	void Draw()
+	void Draw() const
 	{
-		neo.Draw(walls, num_walls);
-		top.Draw(walls, num_walls);
+		neo.Draw(walls);
+		top.Draw(walls);
 		scr.Draw();
 	};
 
