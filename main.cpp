@@ -221,6 +221,11 @@ public:
 	};
 };
 
+struct RayHit
+{
+	double dist, wall_x, wall_y;
+};
+
 class Player
 {
 	int x, y;
@@ -236,6 +241,9 @@ public:
 		for (int i = 0; i < num_rays; i++)
 			rays.push_back(Ray(x, y, i * view_angle / num_rays));
 	};
+
+	int GetX() const { return x; }
+	int GetY() const { return y; }
 
 	bool CanMove(int dx, int dy, int map_width, int map_height) const
 	{
@@ -257,38 +265,39 @@ public:
 			rays[i].Move(dx, dy);
 	}
 
-	void Draw(const std::vector<Wall> &walls) const
+	std::vector<RayHit> CalcRayHits(const std::vector<Wall> &walls) const
 	{
+		std::vector<RayHit> res;
+
 		for (size_t i = 0; i < rays.size(); i++)
 		{
-			bool hit = false;
 			int j_hit;
-			double tw, tr, tw_hit;
-			double tr_hit = std::numeric_limits<double>::max();
+			double tw_hit, tr_hit = std::numeric_limits<double>::max();
 
 			for (size_t j = 0; j < walls.size(); j++)
+			{
+				double tw, tr;
 				if (rays[i].Intersect(walls[j], tw, tr))
 					if (tr < tr_hit)
 					{
-						hit = true;
 						j_hit = j;
 						tr_hit = tr;
 						tw_hit = tw;
 					}
+			}
 
-			if (hit)
+			if (tr_hit != std::numeric_limits<double>::max())
 			{
-				// TODO: Rework this
-				const int y_offset = 270;
-				const double scale = 1.5;
 				const Wall w = walls[j_hit];
-				int x1 = round(x * scale);
-				int y1 = round(y * scale) + y_offset;
-				int x2 = round(Mix(w.x1, w.x2, tw_hit) * scale);
-				int y2 = round(Mix(w.y1, w.y2, tw_hit) * scale) + y_offset;
-				Screen.Line(x1, y1, x2, y2, Color::Gray(33));
+				res.push_back({
+					.dist = tr_hit,
+					.wall_x = Mix(w.x1, w.x2, tw_hit),
+					.wall_y = Mix(w.y1, w.y2, tw_hit)
+				});
 			}
 		}
+
+		return res;
 	};
 };
 
@@ -325,8 +334,18 @@ public:
 	{
 	};
 
-	void Draw(const std::vector<Wall> &walls) const
+	void Draw(int plr_x, int plr_y, const std::vector<Wall> &walls,
+			  const std::vector<RayHit> &ray_hits) const
 	{
+		for (size_t i = 0; i < ray_hits.size(); i++)
+		{
+			int x1 = round(plr_x * scale) + x;
+			int y1 = round(plr_y * scale) + y;
+			int x2 = round(ray_hits[i].wall_x * scale) + x;
+			int y2 = round(ray_hits[i].wall_y * scale) + y;
+			Screen.Line(x1, y1, x2, y2, Color::Gray(33));
+		}
+
 		for (size_t i = 0; i < walls.size(); i++)
 			walls[i].Draw(x, y, scale);
 
@@ -361,6 +380,8 @@ class Scene
 	Player neo;
 	View2D top;
 	View3D scr;
+
+	std::vector<RayHit> ray_hits;
 
 public:
 	Scene()
@@ -398,15 +419,17 @@ public:
 
 	void Draw() const
 	{
-		neo.Draw(walls);
-		top.Draw(walls);
+		top.Draw(neo.GetX(), neo.GetY(), walls, ray_hits);
 		scr.Draw();
 	};
 
 	void Move(int dx, int dy)
 	{
 		if (neo.CanMove(dx, dy, map_width, map_height))
+		{
 			neo.Move(dx, dy);
+			ray_hits = neo.CalcRayHits(walls);
+		}
 	}
 };
 
