@@ -14,6 +14,13 @@ double Mix(double start, double end, double t)
 	return start + (end - start) * t;
 }
 
+// Map a value from input range to output range
+double Map(double x, double in_min, double in_max,
+		   double out_min, double out_max)
+{
+	return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
 class Color
 {
 public:
@@ -156,6 +163,15 @@ public:
 			Error("SDL_RenderDrawLine failed");
 	}
 
+	void RectFill(int x, int y, int w, int h, const Color &c = Color::White()) const
+	{
+		SetDrawColor(c);
+
+		SDL_Rect rect = { x, y, w, h };
+
+		if (SDL_RenderFillRect(renderer, &rect))
+			Error("SDL_RenderDrawLine failed");
+	}
 };
 
 static SDL_Screen Screen;
@@ -363,8 +379,17 @@ public:
 	{
 	};
 
-	void Draw() const
+	void Draw(const std::vector<RayHit> &ray_hits, int map_width) const
 	{
+		for (size_t i = 0; i < ray_hits.size(); i++)
+		{
+			int w = width / ray_hits.size();
+			int h = Map(ray_hits[i].dist, 0, map_width, height, 0);
+			uint8_t d = Map(ray_hits[i].dist, 0, map_width, 100, 0);
+			Color c = Color::Gray(d);
+			Screen.RectFill(x + i * w, y + (height - h) / 2, w, h, c);
+		}
+
 		View::Draw();
 	};
 };
@@ -420,7 +445,7 @@ public:
 	void Draw() const
 	{
 		top.Draw(neo.GetX(), neo.GetY(), walls, ray_hits);
-		scr.Draw();
+		scr.Draw(ray_hits, map_width);
 	};
 
 	void Move(int dx, int dy)
