@@ -188,7 +188,7 @@ class Ray
 	Vector2 dir;
 
 public:
-	Ray(int x, int y, int a): x(x), y(y)
+	Ray(int x, int y, double a): x(x), y(y)
 	{
 		double angle = a * M_PI / 180.0;
 		dir.x = cos(angle);
@@ -224,8 +224,9 @@ public:
 class Player
 {
 	int x, y;
-	static const int num_rays = 45;
 	std::vector<Ray> rays;
+	static constexpr int num_rays = 160;
+	static constexpr double view_angle = 45.0;
 
 public:
 	Player() = default;
@@ -233,7 +234,7 @@ public:
 	Player(int x, int y): x(x), y(y)
 	{
 		for (int i = 0; i < num_rays; i++)
-			rays.push_back(Ray(x, y, i));
+			rays.push_back(Ray(x, y, i * view_angle / num_rays));
 	};
 
 	bool CanMove(int dx, int dy, int map_width, int map_height) const
@@ -285,7 +286,7 @@ public:
 				int y1 = round(y * scale) + y_offset;
 				int x2 = round(Mix(w.x1, w.x2, tw_hit) * scale);
 				int y2 = round(Mix(w.y1, w.y2, tw_hit) * scale) + y_offset;
-				Screen.Line(x1, y1, x2, y2);
+				Screen.Line(x1, y1, x2, y2, Color::Gray(33));
 			}
 		}
 	};
