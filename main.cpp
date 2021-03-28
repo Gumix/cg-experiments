@@ -64,6 +64,14 @@ public:
 	Vector2 & operator /= (double k) { x /= k; y /= k; return *this; }
 };
 
+static Vector2 UnitVecFromAngle(double angle)
+{
+	double rad = angle * M_PI / 180.0;
+	Vector2 res = { cos(rad), sin(rad) };
+	res.Normalize();
+	return res;
+}
+
 class SDL_Screen
 {
 	int width, height;
@@ -201,25 +209,28 @@ public:
 class Ray
 {
 	double x, y;
-	Vector2 dir;
+	double angle; // in degrees
 
 public:
-	Ray(double x, double y, double a): x(x), y(y)
+	Ray(double x, double y, double a): x(x), y(y), angle(a)
 	{
-		double angle = a * M_PI / 180.0;
-		dir.x = cos(angle);
-		dir.y = sin(angle);
-		dir.Normalize();
 	};
 
-	void Move(int dx, int dy)
+	void Rotate(double da)
 	{
-		x += dx;
-		y += dy;
+		angle += da;
+	}
+
+	void MoveTo(double new_x, double new_y)
+	{
+		x = new_x;
+		y = new_y;
 	}
 
 	bool Intersect(const Wall &wall, double &tw, double &tr) const
 	{
+		Vector2 dir = UnitVecFromAngle(angle);
+
 		double nwx = wall.y2 - wall.y1;
 		double nwy = wall.x1 - wall.x2;
 		double nrx = dir.y;
@@ -245,6 +256,7 @@ struct RayHit
 class Player
 {
 	double x, y;
+	double heading;
 	std::vector<Ray> rays;
 	static constexpr int num_rays = 160;
 	static constexpr double view_angle = 45.0;
@@ -252,33 +264,46 @@ class Player
 public:
 	Player() = default;
 
-	Player(double x, double y): x(x), y(y)
+	Player(double x, double y): x(x), y(y), heading(0.0)
 	{
+		double a = heading - view_angle / 2.0;
 		for (int i = 0; i < num_rays; i++)
-			rays.push_back(Ray(x, y, i * view_angle / num_rays));
+			rays.push_back(Ray(x, y, a + i * view_angle / num_rays));
 	};
 
 	double GetX() const { return x; }
 	double GetY() const { return y; }
 
-	bool CanMove(int dx, int dy, int map_width, int map_height) const
+	bool CanMove(double dd, int map_width, int map_height) const
 	{
-		if (x + dx < 0 || y + dy < 0)
+		Vector2 dir = UnitVecFromAngle(heading);
+		int new_x = round(x + dir.x * dd);
+		int new_y = round(y + dir.y * dd);
+
+		if (new_x < 0 || new_y < 0)
 			return false;
 
-		if (x + dx >= map_width || y + dy >= map_height)
+		if (new_x >= map_width || new_y >= map_height)
 			return false;
 
 		return true;
 	}
 
-	void Move(int dx, int dy)
+	void Rotate(double da)
 	{
-		x += dx;
-		y += dy;
+		heading += da;
+		for (size_t i = 0; i < rays.size(); i++)
+			rays[i].Rotate(da);
+	}
+
+	void Move(double dd)
+	{
+		Vector2 dir = UnitVecFromAngle(heading);
+		x += dir.x * dd;
+		y += dir.y * dd;
 
 		for (size_t i = 0; i < rays.size(); i++)
-			rays[i].Move(dx, dy);
+			rays[i].MoveTo(x, y);
 	}
 
 	std::vector<RayHit> CalcRayHits(const std::vector<Wall> &walls) const
@@ -415,6 +440,7 @@ public:
 		InitViews();
 		InitWalls();
 		neo = Player(map_width / 2, map_height / 2);
+		ray_hits = neo.CalcRayHits(walls);
 	}
 
 	void InitViews()
@@ -449,54 +475,57 @@ public:
 		scr.Draw(ray_hits, map_width);
 	};
 
-	void Move(int dx, int dy)
+	void Move(double da, double dd)
 	{
-		if (neo.CanMove(dx, dy, map_width, map_height))
-		{
-			neo.Move(dx, dy);
+		if (da)
+			neo.Rotate(da);
+
+		if (dd && neo.CanMove(dd, map_width, map_height))
+			neo.Move(dd);
+
+		if (da || dd)
 			ray_hits = neo.CalcRayHits(walls);
-		}
 	}
 };
 
-void KeyDown(SDL_Keycode key, int &dx, int &dy)
+void KeyDown(SDL_Keycode key, double &da, double &dd)
 {
 	switch (key)
 	{
 		case SDLK_LEFT:
-			dx = -1;
+			da = -0.5;
 			break;
 		case SDLK_RIGHT:
-			dx = 1;
+			da = 0.5;
 			break;
 		case SDLK_UP:
-			dy = -1;
+			dd = 0.5;
 			break;
 		case SDLK_DOWN:
-			dy = 1;
+			dd = -0.5;
 			break;
 	}
 }
 
-void KeyUp(SDL_Keycode key, int &dx, int &dy)
+void KeyUp(SDL_Keycode key, double &da, double &dd)
 {
 	switch (key)
 	{
 		case SDLK_LEFT:
-			if (dx < 0)
-				dx = 0;
+			if (da < 0.0)
+				da = 0.0;
 			break;
 		case SDLK_RIGHT:
-			if (dx > 0)
-				dx = 0;
+			if (da > 0.0)
+				da = 0.0;
 			break;
 		case SDLK_UP:
-			if (dy < 0)
-				dy = 0;
+			if (dd > 0)
+				dd = 0.0;
 			break;
 		case SDLK_DOWN:
-			if (dy > 0)
-				dy = 0;
+			if (dd < 0)
+				dd = 0.0;
 			break;
 	}
 }
@@ -504,7 +533,7 @@ void KeyUp(SDL_Keycode key, int &dx, int &dy)
 int main()
 {
 	Scene Scene;
-	int dx = 0, dy = 0;
+	double da = 0.0, dd = 0.0;
 	bool stop = false;
 
 	std::srand(std::time(nullptr));
@@ -517,10 +546,10 @@ int main()
 			switch (event.type)
 			{
 				case SDL_KEYDOWN:
-					KeyDown(event.key.keysym.sym, dx, dy);
+					KeyDown(event.key.keysym.sym, da, dd);
 					break;
 				case SDL_KEYUP:
-					KeyUp(event.key.keysym.sym, dx, dy);
+					KeyUp(event.key.keysym.sym, da, dd);
 					break;
 				case SDL_QUIT:
 					stop = true;
@@ -528,7 +557,7 @@ int main()
 			}
 		}
 
-		Scene.Move(dx, dy);
+		Scene.Move(da, dd);
 		Screen.Clear();
 		Scene.Draw();
 		Screen.Update();
