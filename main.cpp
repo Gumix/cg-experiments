@@ -186,13 +186,13 @@ public:
 	{
 	};
 
-	void Draw(int x_offset, int y_offset, double scale,
+	void Draw(double x_offset, double y_offset, double scale,
 			  const Color &c = Color::White()) const
 	{
-		int x1s = round(x1 * scale) + x_offset;
-		int y1s = round(y1 * scale) + y_offset;
-		int x2s = round(x2 * scale) + x_offset;
-		int y2s = round(y2 * scale) + y_offset;
+		int x1s = round(x1 * scale + x_offset);
+		int y1s = round(y1 * scale + y_offset);
+		int x2s = round(x2 * scale + x_offset);
+		int y2s = round(y2 * scale + y_offset);
 
 		Screen.Line(x1s, y1s, x2s, y2s, c);
 	};
@@ -200,11 +200,11 @@ public:
 
 class Ray
 {
-	int x, y;
+	double x, y;
 	Vector2 dir;
 
 public:
-	Ray(int x, int y, double a): x(x), y(y)
+	Ray(double x, double y, double a): x(x), y(y)
 	{
 		double angle = a * M_PI / 180.0;
 		dir.x = cos(angle);
@@ -244,7 +244,7 @@ struct RayHit
 
 class Player
 {
-	int x, y;
+	double x, y;
 	std::vector<Ray> rays;
 	static constexpr int num_rays = 160;
 	static constexpr double view_angle = 45.0;
@@ -252,14 +252,14 @@ class Player
 public:
 	Player() = default;
 
-	Player(int x, int y): x(x), y(y)
+	Player(double x, double y): x(x), y(y)
 	{
 		for (int i = 0; i < num_rays; i++)
 			rays.push_back(Ray(x, y, i * view_angle / num_rays));
 	};
 
-	int GetX() const { return x; }
-	int GetY() const { return y; }
+	double GetX() const { return x; }
+	double GetY() const { return y; }
 
 	bool CanMove(int dx, int dy, int map_width, int map_height) const
 	{
@@ -350,15 +350,16 @@ public:
 	{
 	};
 
-	void Draw(int plr_x, int plr_y, const std::vector<Wall> &walls,
+	void Draw(double plr_x, double plr_y,
+			  const std::vector<Wall> &walls,
 			  const std::vector<RayHit> &ray_hits) const
 	{
 		for (size_t i = 0; i < ray_hits.size(); i++)
 		{
-			int x1 = round(plr_x * scale) + x;
-			int y1 = round(plr_y * scale) + y;
-			int x2 = round(ray_hits[i].wall_x * scale) + x;
-			int y2 = round(ray_hits[i].wall_y * scale) + y;
+			int x1 = round(plr_x * scale + x);
+			int y1 = round(plr_y * scale + y);
+			int x2 = round(ray_hits[i].wall_x * scale + x);
+			int y2 = round(ray_hits[i].wall_y * scale + y);
 			Screen.Line(x1, y1, x2, y2, Color::Gray(33));
 		}
 
