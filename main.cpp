@@ -21,6 +21,46 @@ double Map(double x, double in_min, double in_max,
 	return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
+class Angle
+{
+	double rad;
+
+	Angle(double deg): rad(deg * M_PI / 180.0)
+	{
+	}
+
+public:
+	Angle() = default;
+
+	Angle operator - (double deg) const
+	{
+		Angle res;
+		res.rad = rad - Angle(deg);
+		return res;
+	}
+
+	Angle & operator += (double deg)
+	{
+		rad += Angle(deg);
+		return *this;
+	}
+
+	operator double () const
+	{
+		return rad;
+	}
+};
+
+double Sin(Angle a)
+{
+	return sin(a);
+}
+
+double Cos(Angle a)
+{
+	return cos(a);
+}
+
 class Color
 {
 public:
@@ -54,6 +94,13 @@ public:
 
 	Vector2() = default;
 	Vector2(double x, double y): x(x), y(y) { }
+	Vector2(Angle a)
+	{
+		x = Cos(a);
+		y = Sin(a);
+		Normalize();
+	}
+
 	double Length() const { return sqrt(x*x + y*y); }
 	void Normalize() { *this /= Length(); }
 	Vector2 operator - () const { return Vector2(-x, -y); }
@@ -63,14 +110,6 @@ public:
 	Vector2 operator / (double k) const { return Vector2(x / k, y / k); }
 	Vector2 & operator /= (double k) { x /= k; y /= k; return *this; }
 };
-
-static Vector2 UnitVecFromAngle(double angle)
-{
-	double rad = angle * M_PI / 180.0;
-	Vector2 res = { cos(rad), sin(rad) };
-	res.Normalize();
-	return res;
-}
 
 class SDL_Screen
 {
@@ -209,10 +248,10 @@ public:
 class Ray
 {
 	double x, y;
-	double angle; // in degrees
+	Angle angle;
 
 public:
-	Ray(double x, double y, double a): x(x), y(y), angle(a)
+	Ray(double x, double y, Angle a): x(x), y(y), angle(a)
 	{
 	};
 
@@ -229,7 +268,7 @@ public:
 
 	bool Intersect(const Wall &wall, double &tw, double &tr) const
 	{
-		Vector2 dir = UnitVecFromAngle(angle);
+		Vector2 dir(angle);
 
 		double nwx = wall.y2 - wall.y1;
 		double nwy = wall.x1 - wall.x2;
@@ -256,7 +295,7 @@ struct RayHit
 class Player
 {
 	double x, y;
-	double heading;
+	Angle heading;
 	std::vector<Ray> rays;
 	static constexpr int num_rays = 160;
 	static constexpr double view_angle = 45.0;
@@ -264,11 +303,14 @@ class Player
 public:
 	Player() = default;
 
-	Player(double x, double y): x(x), y(y), heading(0.0)
+	Player(double x, double y): x(x), y(y)
 	{
-		double a = heading - view_angle / 2.0;
+		Angle a = heading - view_angle / 2.0;
 		for (int i = 0; i < num_rays; i++)
-			rays.push_back(Ray(x, y, a + i * view_angle / num_rays));
+		{
+			rays.push_back(Ray(x, y, a));
+			a += view_angle / num_rays;
+		}
 	};
 
 	double GetX() const { return x; }
@@ -276,7 +318,7 @@ public:
 
 	bool CanMove(double dd, int map_width, int map_height) const
 	{
-		Vector2 dir = UnitVecFromAngle(heading);
+		Vector2 dir(heading);
 		int new_x = round(x + dir.x * dd);
 		int new_y = round(y + dir.y * dd);
 
@@ -298,7 +340,7 @@ public:
 
 	void Move(double dd)
 	{
-		Vector2 dir = UnitVecFromAngle(heading);
+		Vector2 dir(heading);
 		x += dir.x * dd;
 		y += dir.y * dd;
 
