@@ -39,6 +39,13 @@ public:
 		return res;
 	}
 
+	Angle operator - (const Angle a) const
+	{
+		Angle res;
+		res.rad = rad - a;
+		return res;
+	}
+
 	Angle & operator += (double deg)
 	{
 		rad += Angle(deg);
@@ -255,6 +262,11 @@ public:
 	{
 	};
 
+	Angle GetAngle() const
+	{
+		return angle;
+	}
+
 	void Rotate(double da)
 	{
 		angle += da;
@@ -297,8 +309,8 @@ class Player
 	double x, y;
 	Angle heading;
 	std::vector<Ray> rays;
-	static constexpr int num_rays = 160;
-	static constexpr double view_angle = 45.0;
+	static constexpr int num_rays = 320;
+	static constexpr double view_angle = 60.0;
 
 public:
 	Player() = default;
@@ -322,10 +334,10 @@ public:
 		int new_x = round(x + dir.x * dd);
 		int new_y = round(y + dir.y * dd);
 
-		if (new_x < 0 || new_y < 0)
+		if (new_x < 1 || new_y < 1)
 			return false;
 
-		if (new_x >= map_width || new_y >= map_height)
+		if (new_x >= map_width - 1 || new_y >= map_height - 1)
 			return false;
 
 		return true;
@@ -373,7 +385,7 @@ public:
 			{
 				const Wall w = walls[j_hit];
 				res.push_back({
-					.dist = tr_hit,
+					.dist = tr_hit * Cos(rays[i].GetAngle() - heading),
 					.wall_x = Mix(w.x1, w.x2, tw_hit),
 					.wall_y = Mix(w.y1, w.y2, tw_hit)
 				});
@@ -430,7 +442,7 @@ public:
 			Screen.Line(x1, y1, x2, y2, Color::Gray(33));
 		}
 
-		for (size_t i = 0; i < walls.size(); i++)
+		for (size_t i = 4; i < walls.size(); i++)
 			walls[i].Draw(x, y, scale);
 
 		View::Draw();
@@ -453,8 +465,9 @@ public:
 		{
 			int w = width / ray_hits.size();
 			int h = Map(ray_hits[i].dist, 0, map_width, height, 0);
-			uint8_t d = Map(ray_hits[i].dist, 0, map_width, 100, 0);
-			Color c = Color::Gray(d);
+			double d2 = ray_hits[i].dist * ray_hits[i].dist;
+			uint8_t b = Map(d2, 0, map_width * map_width, 100, 0);
+			Color c = Color::Gray(b);
 			Screen.RectFill(x + i * w, y + (height - h) / 2, w, h, c);
 		}
 
